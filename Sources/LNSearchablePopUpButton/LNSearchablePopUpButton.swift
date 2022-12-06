@@ -27,7 +27,8 @@ fileprivate extension NSMenuItem {
 		}
 	}
 	
-	func smartEquals(_ other: NSMenuItem) -> Bool {
+	func smartEquals(_ other: NSMenuItem?) -> Bool {
+		guard let other = other else { return false }
 		return self == other || smartIdentifier == other.smartIdentifier
 	}
 }
@@ -208,7 +209,9 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 			selectedItemBeforeSearch = selectedItem
 		} else {
 			//User selected some search result, so forget the selected item before search
-			selectedItemBeforeSearch = nil
+			if selectedItem?.smartEquals(selectedItemBeforeSearch) == false {
+				selectedItemBeforeSearch = nil
+			}
 		}
 	}
 	
@@ -264,8 +267,6 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 			}
 		}
 
-		let currentlySelectedMenuItem = self.selectedItem
-
 		guard let menu = menu else {
 			return
 		}
@@ -281,49 +282,84 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 			menu.addItem(menuItem)
 		}
 
-		if let currentlySelectedMenuItem = currentlySelectedMenuItem, currentlySelectedMenuItem != searchBarItem {
+		updateSelectionAndNotifyIfNeeded(previousSelection: selectedItem)
+	}
+	
+	fileprivate func updateSelectionAndNotifyIfNeeded(previousSelection: NSMenuItem?) {
+		guard selectionGroupingCount == 0 else {
+			return
+		}
+		
+		guard let menuItems = menu?.items else {
+			return
+		}
+		
+		if let currentlySelectedMenuItem = selectedItem, currentlySelectedMenuItem != searchBarItem {
 			if let newSelectedMenuItem = menuItems.first(where: { $0.smartEquals(currentlySelectedMenuItem) }) {
 				select(newSelectedMenuItem)
 			} else {
 				select(nil)
 			}
+		}
+		
+		if let selectedItemBeforeSearch = selectedItemBeforeSearch, let newSelectedMenuItem = menuItems.first(where: { $0.smartEquals(selectedItemBeforeSearch) }) {
+			select(newSelectedMenuItem)
+		} else if let previousSelection = previousSelection, let newSelectedMenuItem = menuItems.first(where: { $0.smartEquals(previousSelection) }) {
+			select(newSelectedMenuItem)
+		}
+		
+		if selectedItem?.smartEquals(previousSelection) == false {
 			sendAction(action, to: target)
 		}
 	}
 	
 	public func searchFieldTextDidChange() {
-		if let editor = searchField.currentEditor() {
-			let selection = editor.selectedRange
-			let wasFirstResponder = searchField.window?.firstResponder == editor
-			menu?.perform(Selector(("highlightItem:")), with: nil)
-			if wasFirstResponder {
-				searchField.window?.makeFirstResponder(searchField)
-				searchField.currentEditor()?.selectedRange = selection
-			}
-		}
-		
-		searchingLabelItemIsVisible = false
-		
-		guard searchField.stringValue.count > 0 else {
-			if let selectedItemBeforeSearch = selectedItemBeforeSearch, let selectedItemBeforeSearchActual = menu?.items.first(where: { $0.smartEquals(selectedItemBeforeSearch) }) {
-				select(selectedItemBeforeSearchActual)
+		groupSelection {
+			if let editor = searchField.currentEditor() {
+				let selection = editor.selectedRange
+				let wasFirstResponder = searchField.window?.firstResponder == editor
+				menu?.perform(Selector(("highlightItem:")), with: nil)
+				if wasFirstResponder {
+					searchField.window?.makeFirstResponder(searchField)
+					searchField.currentEditor()?.selectedRange = selection
+				}
 			}
 			
-			return
-		}
-		
-		if performsSearchInItemMenuTitles {
-			removeAllSearchItems()
+			searchingLabelItemIsVisible = false
 			
-			let filtered = itemMenu.items.filter { $0.title.localizedCaseInsensitiveContains(searchField.stringValue) }
-			for filteredItem in copyMenuItems(from: filtered) {
-				searchMenu.addItem(filteredItem)
+			guard searchField.stringValue.count > 0 else {
+				if let selectedItemBeforeSearch = selectedItemBeforeSearch, let selectedItemBeforeSearchActual = menu?.items.first(where: { $0.smartEquals(selectedItemBeforeSearch) }) {
+					select(selectedItemBeforeSearchActual)
+				}
+				
+				return
 			}
 			
-			return
+			if performsSearchInItemMenuTitles {
+				removeAllSearchItems()
+				
+				let filtered = itemMenu.items.filter { $0.title.localizedCaseInsensitiveContains(searchField.stringValue) }
+				for filteredItem in copyMenuItems(from: filtered) {
+					searchMenu.addItem(filteredItem)
+				}
+				
+				return
+			}
+			
+			searchingLabelItemIsVisible = true
 		}
+	}
+	
+	fileprivate var selectionGroupingCount: Int = 0
+	fileprivate func groupSelection(_ actions: () -> Void) {
+		let previousSelection = selectedItem
 		
-		searchingLabelItemIsVisible = true
+		selectionGroupingCount += 1
+		
+		actions()
+		
+		selectionGroupingCount -= 1
+		updateSelectionAndNotifyIfNeeded(previousSelection: previousSelection)
 	}
 }
 
