@@ -26,6 +26,9 @@ class ViewController: NSViewController, NSSearchFieldDelegate {
 	override func viewDidLoad() {
 		super.viewDidLoad()
 		
+		searchablePopUpButton.defaultTitle = "Select Document…"
+		searchablePopUpButton.performsSearchInItemMenuTitles = false
+		
 		searchablePopUpButton.target = self
 		searchablePopUpButton.action = #selector(ViewController.didSelectItem)
 		
@@ -38,31 +41,31 @@ class ViewController: NSViewController, NSSearchFieldDelegate {
 	
 	fileprivate var searchTimer: Timer? = nil
 	func controlTextDidChange(_ obj: Notification) {
-//		searchTimer?.invalidate()
-//		searchTimer = nil
-//		
-//		searchablePopUpButton.removeAllSearchItems()
-//		
-//		let searchQuery = searchablePopUpButton.searchField.stringValue
-//		
-//		guard searchQuery.count > 0 else {
-//			return
-//		}
-//		
-//		let timer = Timer(timeInterval: 1.0, repeats: false, block: { [weak self] _ in
-//			var demoSearchItems = [String]()
-//			for idx in 0..<Int.random(in: 0..<4) {
-//				demoSearchItems.append("“\(searchQuery)” demo result \(idx)")
-//			}
-//			
-//			self?.searchablePopUpButton.addSearchItems(withTitles: demoSearchItems, for: searchQuery)
-//			
-//			self?.searchablePopUpButton.finishSearch()
-//			self?.searchTimer?.invalidate()
-//			self?.searchTimer = nil
-//		})
-//		RunLoop.current.add(timer, forMode: .common)
-//		searchTimer = timer
+		searchTimer?.invalidate()
+		searchTimer = nil
+		
+		searchablePopUpButton.removeAllSearchItems()
+		
+		let searchQuery = searchablePopUpButton.searchField.stringValue
+		
+		guard searchQuery.count > 0 else {
+			return
+		}
+		
+		let timer = Timer(timeInterval: 1.0, repeats: false, block: { [weak self] _ in
+			var demoSearchItems = [String]()
+			for idx in 0..<Int.random(in: 0..<4) {
+				demoSearchItems.append("“\(searchQuery)” demo result \(idx)")
+			}
+			
+			self?.searchablePopUpButton.addSearchItems(withTitles: demoSearchItems, for: searchQuery)
+			
+			self?.searchablePopUpButton.finishSearch()
+			self?.searchTimer?.invalidate()
+			self?.searchTimer = nil
+		})
+		RunLoop.current.add(timer, forMode: .common)
+		searchTimer = timer
 	}
 	
 	@objc func didSelectItem() {

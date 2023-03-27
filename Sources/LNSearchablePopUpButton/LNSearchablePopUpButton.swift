@@ -138,11 +138,44 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 			wrapper.bottomAnchor.constraint(equalTo: noResultsLabel.bottomAnchor, constant: 3),
 		])
 		
-		let searchingLabelItem = NSMenuItem(title: noResultsTitle, action: nil, keyEquivalent: "")
-		searchingLabelItem.view = wrapper
-		searchingLabelItem.isEnabled = false
+		let noResultsLabelItem = NSMenuItem(title: noResultsTitle, action: nil, keyEquivalent: "")
+		noResultsLabelItem.view = wrapper
+		noResultsLabelItem.isEnabled = false
 		
-		return searchingLabelItem
+		return noResultsLabelItem
+	}()
+	
+	public var noItemsTitle: String = "No Items" {
+		didSet {
+			noItemsLabel.stringValue = noItemsTitle
+			noItemsLabelItem.title = noItemsTitle
+		}
+	}
+	
+	fileprivate lazy var noItemsLabel: NSTextField = {
+		let noItemsLabel = NSTextField(labelWithString: noItemsTitle)
+		noItemsLabel.font = NSFont.menuFont(ofSize: NSFont.systemFontSize)
+		noItemsLabel.textColor = NSColor.secondaryLabelColor
+		noItemsLabel.translatesAutoresizingMaskIntoConstraints = false
+		return noItemsLabel
+	}()
+	
+	fileprivate lazy var noItemsLabelItem: NSMenuItem = {
+		let wrapper = NSView()
+		wrapper.translatesAutoresizingMaskIntoConstraints = false
+		wrapper.addSubview(noItemsLabel)
+		NSLayoutConstraint.activate([
+			noItemsLabel.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 13.5),
+			wrapper.trailingAnchor.constraint(equalTo: noItemsLabel.trailingAnchor),
+			noItemsLabel.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 3),
+			wrapper.bottomAnchor.constraint(equalTo: noItemsLabel.bottomAnchor, constant: 3),
+		])
+		
+		let noItemsLabelItem = NSMenuItem(title: noItemsTitle, action: nil, keyEquivalent: "")
+		noItemsLabelItem.view = wrapper
+		noItemsLabelItem.isEnabled = false
+		
+		return noItemsLabelItem
 	}()
 	
 	public convenience init() {
@@ -200,16 +233,69 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 			NotificationCenter.default.addObserver(forName: NSMenu.didChangeItemNotification, object: searchMenu, queue: nil, using: handler),
 			NotificationCenter.default.addObserver(forName: NSMenu.didRemoveItemNotification, object: searchMenu, queue: nil, using: handler),
 		]
+		
+		refreshMenuItems()
+	}
+	
+	fileprivate func toUserMenuItem(_ menuItem: NSMenuItem) -> NSMenuItem? {
+		if !isSearching {
+			return itemMenu.items.filter { $0.smartEquals(menuItem) }.first
+		} else {
+			return searchMenu.items.filter { $0.smartEquals(menuItem) }.first
+		}
+	}
+	
+	fileprivate func toInternalMenuItem(_ menuItem: NSMenuItem) -> NSMenuItem? {
+		guard let menu = menu else {
+			return nil
+		}
+		
+		return menu.items.filter { $0.smartEquals(menuItem) }.first
 	}
 	
 	fileprivate var selectedItemBeforeSearch: NSMenuItem? = nil
 	
+	public override var selectedItem: NSMenuItem? {
+		get {
+			guard let selectedItem = super.selectedItem else {
+				return nil
+			}
+			
+			return toUserMenuItem(selectedItem)
+		}
+	}
+	
+	public override func select(_ item: NSMenuItem?) {
+		guard let item = item else {
+			super.select(nil)
+			return
+		}
+		
+		guard let item = toInternalMenuItem(item) else {
+			fatalError("Unknown menu item provided")
+		}
+		
+		super.select(item)
+	}
+	
+	public override func selectItem(at index: Int) {
+		guard let userMenuItem = (isSearching ? searchMenu : itemMenu).item(at: index) else {
+			return
+		}
+		
+		guard let internalMenuItem = toInternalMenuItem(userMenuItem) else {
+			return
+		}
+		
+		select(internalMenuItem)
+	}
+	
 	@objc private func didSelectMenuItem() {
-		if searchField.stringValue.count == 0 {
-			selectedItemBeforeSearch = selectedItem
+		if !isSearching {
+			selectedItemBeforeSearch = super.selectedItem
 		} else {
 			//User selected some search result, so forget the selected item before search
-			if selectedItem?.smartEquals(selectedItemBeforeSearch) == false {
+			if super.selectedItem?.smartEquals(selectedItemBeforeSearch) == false {
 				selectedItemBeforeSearch = nil
 			}
 		}
@@ -244,25 +330,31 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 	
 	public func clearSearch() {
 		searchField.stringValue = ""
-		searchMenu.removeAllItems()
-		
-		refreshMenuItems()
+		removeAllSearchItems()
 	}
 	
 	public func finishSearch() {
 		searchingLabelItemIsVisible = false
 	}
 	
+	fileprivate var isSearching: Bool {
+		return searchField.stringValue.count > 0
+	}
+	
 	fileprivate func refreshMenuItems() {
 		var menuItems: [NSMenuItem]
-		if searchField.stringValue.count == 0 {
+		if !isSearching {
 			menuItems = copyMenuItems(from: itemMenu.items)
+			
+			if menuItems.count == 0 {
+				menuItems.append(noItemsLabelItem)
+			}
 		} else {
 			menuItems = copyMenuItems(from: searchMenu.items)
 			
 			if searchingLabelItemIsVisible {
 				menuItems.append(searchingLabelItem)
-			} else if searchField.stringValue.count > 0 && searchMenu.items.count == 0 {
+			} else if isSearching && searchMenu.items.count == 0 {
 				menuItems.append(noResultsLabelItem)
 			}
 		}
@@ -282,7 +374,7 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 			menu.addItem(menuItem)
 		}
 
-		updateSelectionAndNotifyIfNeeded(previousSelection: selectedItem)
+		updateSelectionAndNotifyIfNeeded(previousSelection: super.selectedItem)
 	}
 	
 	fileprivate func updateSelectionAndNotifyIfNeeded(previousSelection: NSMenuItem?) {
@@ -294,7 +386,7 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 			return
 		}
 		
-		if let currentlySelectedMenuItem = selectedItem, currentlySelectedMenuItem != searchBarItem {
+		if let currentlySelectedMenuItem = super.selectedItem, currentlySelectedMenuItem != searchBarItem {
 			if let newSelectedMenuItem = menuItems.first(where: { $0.smartEquals(currentlySelectedMenuItem) }) {
 				select(newSelectedMenuItem)
 			} else {
@@ -308,7 +400,7 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 			select(newSelectedMenuItem)
 		}
 		
-		if selectedItem?.smartEquals(previousSelection) == false {
+		if super.selectedItem?.smartEquals(previousSelection) == false {
 			sendAction(action, to: target)
 		}
 	}
@@ -327,7 +419,7 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 			
 			searchingLabelItemIsVisible = false
 			
-			guard searchField.stringValue.count > 0 else {
+			guard isSearching else {
 				if let selectedItemBeforeSearch = selectedItemBeforeSearch, let selectedItemBeforeSearchActual = menu?.items.first(where: { $0.smartEquals(selectedItemBeforeSearch) }) {
 					select(selectedItemBeforeSearchActual)
 				}
@@ -352,7 +444,7 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 	
 	fileprivate var selectionGroupingCount: Int = 0
 	fileprivate func groupSelection(_ actions: () -> Void) {
-		let previousSelection = selectedItem
+		let previousSelection = super.selectedItem
 		
 		selectionGroupingCount += 1
 		
@@ -393,14 +485,30 @@ extension LNSearchablePopUpButton {
 		itemMenu.addItem(withTitle: title, action: nil, keyEquivalent: "")
 	}
 	
+	open func addItem(withTitle title: String, representedObject obj: Any? = nil) {
+		let menuItem = itemMenu.addItem(withTitle: title, action: nil, keyEquivalent: "")
+		menuItem.representedObject = obj
+	}
+	
 	open override func addItems(withTitles itemTitles: [String]) {
 		itemTitles.forEach {
 			addItem(withTitle: $0)
 		}
 	}
 	
+	public func addItems(withTitlesAndRepresentedObjects itemTitlesAndRepresentedObjects: [(String, Any?)]) {
+		itemTitlesAndRepresentedObjects.forEach {
+			addItem(withTitle: $0, representedObject: $1)
+		}
+	}
+	
 	open override func insertItem(withTitle title: String, at index: Int) {
 		itemMenu.insertItem(withTitle: title, action: nil, keyEquivalent: "", at: index)
+	}
+	
+	open func insertItem(withTitle title: String, representedObject obj: Any? = nil, at index: Int) {
+		let menuItem = itemMenu.insertItem(withTitle: title, action: nil, keyEquivalent: "", at: index)
+		menuItem.representedObject = obj
 	}
 	
 	open override func removeItem(withTitle title: String) {
@@ -458,34 +566,17 @@ extension LNSearchablePopUpButton {
 	open override var lastItem: NSMenuItem? {
 		return itemMenu.items.last
 	}
-	
-	// Dealing with selection
-//	open override func select(_ item: NSMenuItem?) {
-//
-//	}
-//
-//	open override func selectItem(at index: Int)
-//
-//	open override func selectItem(withTitle title: String)
-//
-//	open override func selectItem(withTag tag: Int) -> Bool
-//
-//	open override func setTitle(_ string: String)
-//
-//
-//	open override var selectedItem: NSMenuItem? { get }
-//
-//	open override var indexOfSelectedItem: Int { get }
 }
 
 //MARK: Search item management
 
 extension LNSearchablePopUpButton {
 	// Adding and removing items
-	open func addSearchItem(withTitle title: String, for searchQuery: String) {
+	open func addSearchItem(withTitle title: String, representedObject obj: Any? = nil, for searchQuery: String) {
 		guard searchField.stringValue == searchQuery else { return }
 		
-		searchMenu.addItem(withTitle: title, action: nil, keyEquivalent: "")
+		let menuItem = searchMenu.addItem(withTitle: title, action: nil, keyEquivalent: "")
+		menuItem.representedObject = obj
 	}
 	
 	open func addSearchItems(withTitles itemTitles: [String], for searchQuery: String) {
@@ -496,10 +587,19 @@ extension LNSearchablePopUpButton {
 		}
 	}
 	
-	open func insertSearchItem(withTitle title: String, at index: Int, for searchQuery: String) {
+	public func addSearchItems(withTitlesAndRepresentedObjects itemTitlesAndRepresentedObjects: [(String, Any?)], for searchQuery: String) {
 		guard searchField.stringValue == searchQuery else { return }
 		
-		searchMenu.insertItem(withTitle: title, action: nil, keyEquivalent: "", at: index)
+		itemTitlesAndRepresentedObjects.forEach {
+			addSearchItem(withTitle: $0, representedObject: $1, for: searchQuery)
+		}
+	}
+	
+	open func insertSearchItem(withTitle title: String, representedObject obj: Any? = nil, at index: Int, for searchQuery: String) {
+		guard searchField.stringValue == searchQuery else { return }
+		
+		let menuItem = searchMenu.insertItem(withTitle: title, action: nil, keyEquivalent: "", at: index)
+		menuItem.representedObject = obj
 	}
 	
 	open func removeSearchItem(withTitle title: String) {
@@ -518,7 +618,7 @@ extension LNSearchablePopUpButton {
 	}
 	
 	// Accessing the items
-	open var searcgItemArray: [NSMenuItem] {
+	open var searchItemArray: [NSMenuItem] {
 		return searchMenu.items
 	}
 	
