@@ -202,6 +202,7 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 	fileprivate func commonInit() {
 		let menu = NSMenu()
 		menu.items = [searchBarItem]
+		menu.delegate = self
 		self.menu = menu
 		
 		super.autoenablesItems = false
@@ -459,16 +460,17 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 	override var frame: NSRect {
 		set {
 			var rv = newValue
-			if let superview = superview, let super2 = superview.superview {
-				if rv.width < super2.frame.width {
-					var superFrame = superview.frame
-					superFrame.size.width = super2.frame.width
-					superview.frame = superFrame
-					
-					rv = CGRect(x: rv.origin.x, y: rv.origin.y, width: super2.frame.width, height: rv.height)
+			if #unavailable(macOS 13.0) {
+				if let superview = superview, let super2 = superview.superview {
+					if rv.width < super2.frame.width {
+						var superFrame = superview.frame
+						superFrame.size.width = super2.frame.width
+						superview.frame = superFrame
+						
+						rv = CGRect(x: rv.origin.x, y: rv.origin.y, width: super2.frame.width, height: rv.height)
+					}
 				}
 			}
-			
 			super.frame = rv
 		}
 		get {
@@ -656,5 +658,20 @@ extension LNSearchablePopUpButton {
 	
 	open var lastSearchItem: NSMenuItem? {
 		return searchMenu.items.last
+	}
+}
+
+extension LNSearchablePopUpButton: NSMenuDelegate {
+	@objc public func confinementRect(for menu: NSMenu, on screen: NSScreen?) -> NSRect {
+		guard let window else {
+			return NSZeroRect
+		}
+		
+		let windowCoords = convert(bounds, to: nil)
+		var screenCoords = window.convertToScreen(windowCoords)
+		screenCoords.origin.y = 0
+		screenCoords.size.height = 400000
+		
+		return screenCoords
 	}
 }
