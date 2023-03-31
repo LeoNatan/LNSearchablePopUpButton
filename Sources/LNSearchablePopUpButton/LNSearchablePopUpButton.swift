@@ -46,6 +46,7 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 @objc @objcMembers public class LNSearchablePopUpButton: NSPopUpButton {
 	public lazy var searchField: NSSearchField = {
 		let searchField = NSSearchField()
+		searchField.placeholderAttributedString = NSAttributedString(string: "Search", attributes: [.foregroundColor: NSColor.placeholderTextColor, .font: searchField.font ?? NSFont.controlContentFont(ofSize: 0)])
 		searchField.focusRingType = .none
 		searchField.translatesAutoresizingMaskIntoConstraints = false
 		
