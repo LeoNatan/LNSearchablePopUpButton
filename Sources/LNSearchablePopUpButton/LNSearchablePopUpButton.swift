@@ -269,7 +269,7 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 	
 	public override func select(_ item: NSMenuItem?) {
 		guard let item = item else {
-			super.select(nil)
+			super.select(searchBarItem)
 			return
 		}
 		
