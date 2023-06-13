@@ -331,8 +331,12 @@ fileprivate func copyMenuItems(from others: [NSMenuItem]) -> [NSMenuItem] {
 	fileprivate var searchMenuItemsObservations: [AnyObject]?
 	
 	public func clearSearch() {
-		finishSearch()
+		guard isSearching else {
+			return
+		}
+		
 		searchField.stringValue = ""
+		finishSearch()
 		removeAllSearchItems()
 	}
 	
